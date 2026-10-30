@@ -1,0 +1,17 @@
+[Unit]
+Description=Lock Maze Capsule capsules when the session ends
+Documentation=file:///usr/share/doc/maze-capsule/README.md
+
+# Does nothing while the session runs. When the user manager stops (the last
+# logout), ExecStop locks every unlocked capsule; a capsule with open files is
+# detached and finishes locking the moment those files close, so no write is
+# cut short.
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+ExecStop=/usr/bin/maze-capsule --lock-all --lazy
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

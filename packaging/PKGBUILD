@@ -1,0 +1,84 @@
+# Maintainer: berkkucukk <berkkucukk@proton.me>
+#
+# LOCAL-BUILD PKGBUILD — see ../build-pkg.sh, which writes `pkgver` and drops
+# `maze-capsule-$pkgver.tar.gz` next to this file before invoking makepkg.
+
+pkgname=maze-capsule
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Maze Capsule — encrypted, self-contained spaces for your files (gocryptfs, no root)"
+arch=('any')
+url="https://mazelinux.berkkucukk.com.tr"
+license=('GPL3')
+
+# No privileges, no network. Capsules are gocryptfs folders mounted through
+# FUSE as the user; the sandbox shell is bubblewrap. Nothing runs as root.
+depends=(
+    'maze-python'   # shared Python runtime with PyQt6: /opt/maze/venv
+    'gocryptfs'     # the encryption (AES-256-GCM, scrypt) — and gocryptfs-xray
+    'fuse3'         # fusermount3, to lock capsules
+    'bubblewrap'    # the sandbox shell
+)
+optdepends=('konsole: terminal for the sandbox shell (any common terminal works)')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "$srcdir/maze-capsule-${pkgver}"
+
+    install -dm755 "$pkgdir/opt/maze-capsule"
+    cp -r mazecapsule main.py "$pkgdir/opt/maze-capsule/"
+    install -m644 MAZE-CAPSULE.png maze-capsule-logo.svg "$pkgdir/opt/maze-capsule/"
+
+    install -dm755 "$pkgdir/usr/bin"
+    install -m755 /dev/stdin "$pkgdir/usr/bin/maze-capsule" << 'LAUNCHER'
+#!/usr/bin/env bash
+exec /opt/maze/venv/bin/python3 /opt/maze-capsule/main.py "$@"
+LAUNCHER
+
+    # Locks every capsule when the session ends. Enabled for every user the
+    # way packages do it: a symlink in default.target.wants.
+    install -Dm644 packaging/maze-capsule-autolock.service \
+        "$pkgdir/usr/lib/systemd/user/maze-capsule-autolock.service"
+    install -dm755 "$pkgdir/usr/lib/systemd/user/default.target.wants"
+    ln -s ../maze-capsule-autolock.service \
+        "$pkgdir/usr/lib/systemd/user/default.target.wants/maze-capsule-autolock.service"
+
+    install -dm755 "$pkgdir/usr/share/applications"
+    install -m644 /dev/stdin "$pkgdir/usr/share/applications/maze-capsule.desktop" << 'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Maze Capsule
+GenericName=Encrypted Spaces
+GenericName[tr]=Şifreli Alanlar
+Comment=Keep files and folders in separate encrypted capsules
+Comment[tr]=Dosya ve klasörlerini ayrı, şifreli kapsüllerde sakla
+Exec=/usr/bin/maze-capsule
+Icon=maze-capsule
+Terminal=false
+Categories=System;Security;Utility;
+Keywords=encrypt;encryption;vault;sandbox;capsule;gocryptfs;private;şifre;şifreleme;kasa;gizli;
+StartupNotify=true
+StartupWMClass=maze-capsule
+Actions=lock-all;
+
+[Desktop Action lock-all]
+Name=Lock all capsules
+Name[tr]=Tüm kapsülleri kilitle
+Exec=/usr/bin/maze-capsule --lock-all --lazy
+DESKTOP
+
+    install -Dm644 maze-capsule-logo.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/maze-capsule.svg"
+    for size in 16 22 24 32 48 64 128 256 512; do
+        install -dm755 "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps"
+        magick MAZE-CAPSULE.png -resize "${size}x${size}" \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/maze-capsule.png" \
+            2>/dev/null || install -m644 MAZE-CAPSULE.png \
+            "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/maze-capsule.png"
+    done
+
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

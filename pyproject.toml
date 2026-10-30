@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maze-capsule"
+version = "1.0.1"
+description = "Maze Capsule — encrypted, self-contained spaces for your files (gocryptfs, no root)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "berkkucukk", email = "berkkucukk@proton.me" }]
+dependencies = ["PyQt6>=6.6.0"]
+
+[project.urls]
+Homepage = "https://mazelinux.berkkucukk.com.tr"
+
+[project.scripts]
+maze-capsule = "mazecapsule.gui.app:run"
+
+[tool.setuptools.packages.find]
+include = ["mazecapsule*"]

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Maze Capsule</title>
+  <!-- Maze Capsule: the Maze family's square frame, sealed twice over. Each
+       frame is a wall around your files; the solid, lit core with its keyhole
+       is the capsule itself — reachable only with the key. Black and white. -->
+  <defs>
+    <radialGradient id="mc-glow" cx="512" cy="512" r="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mc-lit" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfcfd8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="#000"/>
+  <circle cx="512" cy="512" r="360" fill="url(#mc-glow)"/>
+  <rect x="245" y="245" width="534" height="534" fill="none" stroke="#f2f2f4"
+        stroke-width="46" stroke-linejoin="miter"/>
+  <rect x="336" y="336" width="352" height="352" fill="none" stroke="#f2f2f4"
+        stroke-width="32" stroke-linejoin="miter"/>
+  <rect x="408" y="408" width="208" height="208" fill="url(#mc-lit)"/>
+  <circle cx="512" cy="494" r="30" fill="#000"/>
+  <path d="M496 502 H528 L540 568 H484 Z" fill="#000"/>
+</svg>
