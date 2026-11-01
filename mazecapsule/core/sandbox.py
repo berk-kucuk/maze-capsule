@@ -15,6 +15,7 @@ from pathlib import Path
 HOME = "/home/capsule"
 
 _TERMINALS: list[tuple[str, list[str]]] = [
+    ("maze-terminal", ["-e"]),
     ("konsole", ["--separate", "-p", "tabtitle={title}", "-e"]),
     ("kgx", ["--"]),
     ("gnome-terminal", ["--wait", "--"]),

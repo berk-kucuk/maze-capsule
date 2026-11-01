@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maze-capsule"
-version = "1.0.1"
+version = "1.1.0"
 description = "Maze Capsule — encrypted, self-contained spaces for your files (gocryptfs, no root)"
 readme = "README.md"
 requires-python = ">=3.11"

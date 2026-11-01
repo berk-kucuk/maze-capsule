@@ -4,7 +4,7 @@
 # `maze-capsule-$pkgver.tar.gz` next to this file before invoking makepkg.
 
 pkgname=maze-capsule
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Maze Capsule — encrypted, self-contained spaces for your files (gocryptfs, no root)"
 arch=('any')

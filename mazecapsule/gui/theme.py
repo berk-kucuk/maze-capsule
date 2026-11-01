@@ -304,6 +304,18 @@ QLabel#warnline {{ color: #e6e6ea; font-size: 12px; font-weight: 600; }}
 QLabel#drop {{ color: #6f6f75; font-size: 11px; }}
 QWidget#trashrow {{ border-top: 1px solid rgba(255, 255, 255, 0.06); }}
 
+/* ── vault layout: toolbar, grid, trash drawer ────────────────────────── */
+QWidget#toolbar {{
+    background-color: rgba(0, 0, 0, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QWidget#drawer {{
+    background-color: rgba(8, 8, 9, 0.92);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+}}
+QLabel#tb_title {{ font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }}
+QLabel#onboard_title {{ font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }}
+
 QMessageBox {{ background-color: #0b0b0c; }}
 QMessageBox QLabel {{ color: {text}; }}
 """

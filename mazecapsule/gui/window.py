@@ -34,7 +34,6 @@ from mazecapsule.gui.i18n import err, human_size, language, set_language, t
 from mazecapsule.gui.icons import app_logo, logo_pixmap
 from mazecapsule.gui.pill import Pill
 
-_CONTENT_W = 1040
 LOW_SPACE = 1_000_000_000  # warn below 1 GB free
 
 
@@ -283,12 +282,23 @@ class MainWindow(QMainWindow):
             h.addWidget(b)
         v.addWidget(header)
 
+        # The vault: a toolbar, the grid of capsules, and the trash as a
+        # drawer on the right that slides in only when asked for.
+        self._toolbar = QWidget()
+        v.addWidget(self._toolbar)
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.viewport().setAutoFillBackground(False)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        v.addWidget(self._scroll, 1)
+        body.addWidget(self._scroll, 1)
+        self._drawer = QWidget()
+        self._drawer.hide()
+        body.addWidget(self._drawer)
+        v.addLayout(body, 1)
 
         footer = QWidget(objectName="footer")
         footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -388,33 +398,15 @@ class MainWindow(QMainWindow):
     # ── page ───────────────────────────────────────────────────────────────
     def _render(self) -> None:
         y = self._scroll.verticalScrollBar().value()
-        page = QWidget()
-        outer = QHBoxLayout(page)
-        outer.setContentsMargins(24, 24, 24, 28)
-        outer.addStretch(1)
-        col = QWidget()
-        col.setMaximumWidth(_CONTENT_W)
-        v = QVBoxLayout(col)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(16)
-        outer.addWidget(col, 100)
-        outer.addStretch(1)
+        self._swap_toolbar(self._build_toolbar())
+        self._swap_drawer(self._build_drawer() if self._show_trash else None)
 
-        v.addWidget(self._hero())
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(24, 22, 24, 26)
+        v.setSpacing(16)
         if not gocrypt.available():
             v.addWidget(self._banner(t("no_gocryptfs")))
-
-        head = QHBoxLayout()
-        head.setContentsMargins(4, 6, 0, 0)
-        head.addWidget(label(t("sec_capsules"), "section"))
-        head.addSpacing(8)
-        head.addWidget(label(str(len(self._capsules)), "meta"))
-        head.addStretch(1)
-        if any(c.unlocked for c in self._capsules):
-            la = button(t("btn_lock_all"), "ghost", "lock")
-            la.clicked.connect(self.lock_all)
-            head.addWidget(la)
-        v.addLayout(head)
 
         self._cards = {}
         if self._capsules:
@@ -425,55 +417,181 @@ class MainWindow(QMainWindow):
                 self._cards[c.id] = card
                 flow.addWidget(card)
             v.addWidget(grid)
+            v.addStretch(1)
         else:
-            v.addWidget(self._empty())
-
-        if self._trash:
-            v.addSpacing(4)
-            v.addWidget(self._trash_panel())
-        v.addStretch(1)
+            v.addStretch(1)
+            v.addWidget(self._onboarding(), 0, Qt.AlignmentFlag.AlignHCenter)
+            v.addStretch(2)
 
         self._scroll.setWidget(page)
         QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(y))
         self._update_status()
 
-    def _hero(self) -> QFrame:
-        hero = GlassFrame(radius=22, tint="#ffffff", strength=1.2)
-        h = QHBoxLayout(hero)
-        h.setContentsMargins(30, 28, 30, 28)
-        h.setSpacing(28)
-        txt = QVBoxLayout()
-        txt.setSpacing(10)
-        txt.addWidget(label(t("eyebrow"), "eyebrow"))
-        txt.addWidget(label(t("hero_title"), "hero_title", wrap=True))
-        txt.addWidget(label(t("hero_sub"), "hero_sub", wrap=True))
-        txt.addSpacing(4)
+    def _swap_toolbar(self, new: QWidget) -> None:
+        layout = self.centralWidget().layout()
+        layout.replaceWidget(self._toolbar, new)
+        self._toolbar.hide()
+        self._toolbar.deleteLater()
+        self._toolbar = new
+
+    def _swap_drawer(self, new: QWidget | None) -> None:
+        holder = self._drawer.parentWidget().layout()
+        replacement = new or QWidget()
+        for i in range(holder.count()):
+            lay = holder.itemAt(i).layout()
+            if lay is not None and lay.indexOf(self._drawer) >= 0:
+                lay.replaceWidget(self._drawer, replacement)
+                break
+        self._drawer.hide()
+        self._drawer.deleteLater()
+        self._drawer = replacement
+        self._drawer.setVisible(new is not None)
+
+    def _build_toolbar(self) -> QWidget:
+        bar = QWidget(objectName="toolbar")
+        bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        bar.setFixedHeight(64)
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(24, 0, 18, 0)
+        h.setSpacing(10)
+        ic = QLabel()
+        ic.setPixmap(glyph_pixmap("capsule", 22, "#f2f2f4"))
+        h.addWidget(ic)
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        titles.addWidget(label(t("tb_capsules"), "tb_title"))
+        u = sum(1 for c in self._capsules if c.unlocked)
+        titles.addWidget(label(t("status_ready", n=len(self._capsules), u=u), "meta"))
+        h.addLayout(titles)
+        h.addStretch(1)
+        if u:
+            la = button(t("btn_lock_all"), "ghost", "lock")
+            la.clicked.connect(self.lock_all)
+            h.addWidget(la)
+        add = button(t("btn_add_existing"), "secondary", "import")
+        add.clicked.connect(lambda: self._add_existing_menu(add))
+        h.addWidget(add)
+        new = button(t("btn_new"), "get", "plus")
+        new.clicked.connect(self.new_capsule)
+        new.setEnabled(gocrypt.available())
+        h.addWidget(new)
+        sep = QFrame(objectName="vline")
+        sep.setFixedSize(1, 22)
+        h.addSpacing(4)
+        h.addWidget(sep)
+        trash = button(f"{t('btn_trash')}  {len(self._trash)}" if self._trash else t("btn_trash"),
+                       "seg_on" if self._show_trash else "ghost", "trash",
+                       icon_color="#000000" if self._show_trash else None)
+        trash.clicked.connect(self._toggle_trash)
+        h.addWidget(trash)
+        return bar
+
+    def _onboarding(self) -> QWidget:
+        """What a capsule is, said once — while there are none yet."""
+        box = QWidget()
+        # A fixed width: word-wrapped labels in a centred, shrink-to-fit box
+        # are sized to one line and cut the rest off.
+        box.setFixedWidth(600)
+        v = QVBoxLayout(box)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(10)
+        mark = QLabel()
+        mark.setPixmap(logo_pixmap(96))
+        v.addWidget(mark, 0, Qt.AlignmentFlag.AlignHCenter)
+        v.addSpacing(6)
+        v.addWidget(label(t("eyebrow"), "eyebrow"), 0, Qt.AlignmentFlag.AlignHCenter)
+        title = label(t("hero_title"), "onboard_title")
+        title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        v.addWidget(title)
+        sub = label(t("hero_sub"), "hero_sub", wrap=True)
+        sub.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        v.addWidget(sub)
+        v.addSpacing(8)
         for key in ("point_1", "point_2", "point_3"):
             row = QHBoxLayout()
             row.setSpacing(10)
             ic = QLabel()
-            ic.setPixmap(glyph_pixmap("point", 15, "#9a9aa0"))
+            ic.setPixmap(glyph_pixmap("check", 15, "#9a9aa0"))
             ic.setFixedWidth(16)
             row.addWidget(ic, 0, Qt.AlignmentFlag.AlignTop)
             row.addWidget(label(t(key), "point", wrap=True), 1)
-            txt.addLayout(row)
-        txt.addSpacing(10)
+            v.addLayout(row)
+        v.addSpacing(14)
         btns = QHBoxLayout()
-        btns.setSpacing(10)
+        btns.addStretch(1)
         new = button(t("btn_new"), "get_lg", "plus")
         new.clicked.connect(self.new_capsule)
         new.setEnabled(gocrypt.available())
         btns.addWidget(new)
-        add = button(t("btn_add_existing"), "secondary_lg", "import")
-        add.clicked.connect(lambda: self._add_existing_menu(add))
-        btns.addWidget(add)
         btns.addStretch(1)
-        txt.addLayout(btns)
-        h.addLayout(txt, 1)
-        mark = QLabel()
-        mark.setPixmap(logo_pixmap(128))
-        h.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
-        return hero
+        v.addLayout(btns)
+        return box
+
+    def _build_drawer(self) -> QWidget:
+        drawer = QWidget(objectName="drawer")
+        drawer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        drawer.setFixedWidth(360)
+        v = QVBoxLayout(drawer)
+        v.setContentsMargins(20, 18, 16, 18)
+        v.setSpacing(6)
+        head = QHBoxLayout()
+        head.addWidget(label(t("sec_trash"), "section"))
+        head.addSpacing(6)
+        head.addWidget(label(str(len(self._trash)), "meta"))
+        head.addStretch(1)
+        close = QPushButton(objectName="round")
+        close.setIcon(glyph("win_close", 14, "#bdbdc2"))
+        close.setFixedSize(30, 30)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.clicked.connect(self._toggle_trash)
+        head.addWidget(close)
+        v.addLayout(head)
+        v.addWidget(label(t("drawer_hint"), "hint", wrap=True))
+        v.addSpacing(8)
+        if not self._trash:
+            v.addWidget(label(t("trash_empty"), "tagline"))
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.viewport().setAutoFillBackground(False)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        inner = QWidget()
+        iv = QVBoxLayout(inner)
+        iv.setContentsMargins(0, 0, 0, 0)
+        iv.setSpacing(0)
+        for tr in self._trash:
+            row = QWidget(objectName="trashrow")
+            row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            rv = QVBoxLayout(row)
+            rv.setContentsMargins(0, 12, 0, 12)
+            rv.setSpacing(6)
+            top = QHBoxLayout()
+            top.setSpacing(10)
+            ic = QLabel()
+            ic.setPixmap(glyph_pixmap("capsule", 18, "#8f8f95"))
+            top.addWidget(ic)
+            txt = QVBoxLayout()
+            txt.setSpacing(1)
+            txt.addWidget(label(tr.name, "title"))
+            txt.addWidget(label(t("trash_row", date=datetime.fromtimestamp(tr.trashed_at)
+                                  .strftime("%Y-%m-%d %H:%M")), "meta"))
+            top.addLayout(txt, 1)
+            rv.addLayout(top)
+            acts = QHBoxLayout()
+            acts.setSpacing(6)
+            rs = button(t("btn_restore"), "secondary", "restore")
+            rs.clicked.connect(lambda _=False, x=tr: self.restore(x))
+            acts.addWidget(rs)
+            pg = button(t("btn_purge"), "ghost", "trash")
+            pg.clicked.connect(lambda _=False, x=tr: self.purge(x))
+            acts.addWidget(pg)
+            acts.addStretch(1)
+            rv.addLayout(acts)
+            iv.addWidget(row)
+        iv.addStretch(1)
+        scroll.setWidget(inner)
+        v.addWidget(scroll, 1)
+        return drawer
 
     def _banner(self, text: str) -> QFrame:
         box = GlassFrame(radius=16)
@@ -485,65 +603,11 @@ class MainWindow(QMainWindow):
         h.addWidget(label(text, "banner_title", wrap=True), 1)
         return box
 
-    def _empty(self) -> QFrame:
-        box = GlassFrame(radius=18)
-        v = QVBoxLayout(box)
-        v.setContentsMargins(24, 34, 24, 34)
-        v.setSpacing(8)
-        ic = QLabel()
-        ic.setPixmap(glyph_pixmap("capsule", 40, "#6f6f75"))
-        ic.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        v.addWidget(ic)
-        tl = label(t("empty_title"), "card_title")
-        tl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        v.addWidget(tl)
-        bd = label(t("empty_body"), "tagline")
-        bd.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        v.addWidget(bd)
-        return box
-
-    def _trash_panel(self) -> QFrame:
-        box = GlassFrame(radius=16)
-        v = QVBoxLayout(box)
-        v.setContentsMargins(20, 12, 20, 12)
-        v.setSpacing(0)
-        head = QHBoxLayout()
-        head.addWidget(label(t("sec_trash"), "section"))
-        head.addSpacing(8)
-        head.addWidget(label(str(len(self._trash)), "meta"))
-        head.addStretch(1)
-        tog = button("▾" if self._show_trash else "▸", "ghost", "trash")
-        tog.clicked.connect(self._toggle_trash)
-        head.addWidget(tog)
-        v.addLayout(head)
-        if self._show_trash:
-            for tr in self._trash:
-                row = QWidget(objectName="trashrow")
-                row.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                h = QHBoxLayout(row)
-                h.setContentsMargins(0, 10, 0, 10)
-                h.setSpacing(10)
-                ic = QLabel()
-                ic.setPixmap(glyph_pixmap("capsule", 18, "#8f8f95"))
-                h.addWidget(ic)
-                txt = QVBoxLayout()
-                txt.setSpacing(2)
-                txt.addWidget(label(tr.name, "title"))
-                txt.addWidget(label(t("trash_row", date=datetime.fromtimestamp(tr.trashed_at)
-                                      .strftime("%Y-%m-%d %H:%M")), "meta"))
-                h.addLayout(txt, 1)
-                rs = button(t("btn_restore"), "secondary", "restore")
-                rs.clicked.connect(lambda _=False, x=tr: self.restore(x))
-                h.addWidget(rs)
-                pg = button(t("btn_purge"), "ghost", "trash")
-                pg.clicked.connect(lambda _=False, x=tr: self.purge(x))
-                h.addWidget(pg)
-                v.addWidget(row)
-        return box
-
     def _toggle_trash(self) -> None:
         self._show_trash = not self._show_trash
-        self.refresh(force=True)
+        # Deferred: this runs inside the clicked() of a toolbar or drawer
+        # button that the refresh replaces.
+        QTimer.singleShot(0, lambda: self.refresh(force=True))
 
     # ── create / add ───────────────────────────────────────────────────────
     def new_capsule(self) -> None:
